@@ -49,7 +49,10 @@ public:
                         bool rotateSticky,
                         bool rollSticky,
                         bool translateSticky,
-                        bool translateZSticky);
+                        bool translateZSticky,
+                        VRVector3 startPos,
+                        VRVector3 startDir,
+                        VRVector3 startUp);
     
     virtual ~VRFakeTrackerDeviceRelative();
     

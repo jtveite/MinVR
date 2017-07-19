@@ -24,7 +24,10 @@ VRFakeTrackerDeviceRelative::VRFakeTrackerDeviceRelative(const std::string &trac
                                          bool rotateSticky,
                                          bool rollSticky,
                                          bool translateSticky,
-                                         bool translateZSticky)
+                                         bool translateZSticky,
+                                         VRVector3 startPos,
+                                         VRVector3 startDir,
+                                         VRVector3 startUp)
 {
     _eventName = trackerName + "_Move";
     _toggleEvent = toggleOnOffEventName;
@@ -48,6 +51,37 @@ VRFakeTrackerDeviceRelative::VRFakeTrackerDeviceRelative(const std::string &trac
     _tracking = false;
     _state = VRFakeTrackerDeviceRelative::XYTranslating;
     _z = 0.0;
+
+    _pos = startPos;
+
+    VRVector3 forward = startDir.normalize();
+    VRVector3 x = startUp.cross(forward).normalize();
+    VRVector3 up = forward.cross(x);
+    std::cout << "StartDir" << startDir << std::endl;
+    std::cout << "StartUp" << startUp << std::endl;
+    std::cout << "StartPos" << startPos << std::endl;
+    std::cout << "forward" << forward << std::endl;
+    std::cout << "x" << x  << std::endl;
+    std::cout << "up" << up  << std::endl;
+
+    _R = VRMatrix4::fromRowMajorElements( x[0], up[0], forward[0], 0,
+                                          x[1], up[1], forward[1], 0,
+                                          x[2], up[2], forward[2], 0,
+                                          0, 0, 0, 1);
+    _transform = VRMatrix4::translation(_pos) * _R;
+    VRMatrix4 xform  = _transform;
+    /*
+    for (int i = 0; i < 4; i++){
+      for (int j = 0; j < 4; j++){
+        std::cout << setw(5) << xform(i,j) << " ";
+      }
+      std::cout << std::endl;
+    }
+    */
+    VRDataIndex di;
+    di.addData(_eventName + "/Transform", xform);
+    _pendingEvents.push(di.serialize(_eventName));
+
 }
     
 
@@ -101,24 +135,20 @@ void VRFakeTrackerDeviceRelative::onVREvent(const MinVR::VREvent &event)
                 float deltaY = mousey - _lastMouseY;
             
                 if (_state == VRFakeTrackerDeviceRelative::ZTranslating) {
-                    _pos =  VRVector3(0, 0, _zScale * deltaY);
-                    _transform = VRMatrix4::translation(_pos) * _transform;
+                    _pos =  VRVector3(0, 0, _zScale * deltaY) + _pos;
                 }
                 else if (_state == VRFakeTrackerDeviceRelative::Rotating) {
                     VRMatrix4 r = VRMatrix4::rotationY(_rScale*deltaX) * VRMatrix4::rotationX(-_rScale*deltaY);
                     _R = r * _R;
-                    _transform = r * _transform;
                 }
                 else if (_state == VRFakeTrackerDeviceRelative::Rolling) {
                     VRMatrix4 r = VRMatrix4::rotationZ(_rScale*deltaX);
                     _R = r * _R;
-                    _transform = r * _transform;
                 }
                 else if (_state == VRFakeTrackerDeviceRelative::XYTranslating){
-                    _pos =  _xyScale * VRVector3(deltaX, deltaY, 0);
-                    _transform = VRMatrix4::translation(_pos) * _transform;
+                    _pos =  _xyScale * VRVector3(deltaX, deltaY, 0) + _pos;
                 } 
-                VRVector3 pos = VRVector3(_xyScale * mousex, _xyScale * mousey, _z);
+                _transform = VRMatrix4::translation(_pos) * _R;
                 VRMatrix4 xform  = _transform;
                 /*
                 for (int i = 0; i < 4; i++){
@@ -151,7 +181,6 @@ void VRFakeTrackerDeviceRelative::appendNewInputEventsSinceLastCall(VRDataQueue 
 
 VRInputDevice*
 VRFakeTrackerDeviceRelative::create(VRMainInterface *vrMain, VRDataIndex *config, const std::string &nameSpace) {
-    std::cout << "Create Fake Tracker" << std::endl;
     std::string devNameSpace = nameSpace;
   
     std::string trackerName = config->getValue("TrackerName", devNameSpace);
@@ -160,15 +189,21 @@ VRFakeTrackerDeviceRelative::create(VRMainInterface *vrMain, VRDataIndex *config
     std::string translateEvent = config->getValue("TranslateEvent", devNameSpace);
     std::string translateZEvent = config->getValue("TranslateZEvent", devNameSpace);
     std::string rollEvent = config->getValue("RollEvent", devNameSpace);
-    float xyScale = config->getValue("XYTranslationScale", devNameSpace);
-    float zScale = config->getValue("ZTranslationScale", devNameSpace);
-    float rScale = config->getValue("RotationScale", devNameSpace);
+    float xyScale = config->getValueWithDefault("XYTranslationScale", 1.0f, devNameSpace);
+    float zScale = config->getValueWithDefault("ZTranslationScale", 1.0f, devNameSpace);
+    float rScale = config->getValueWithDefault("RotationScale", 1.0f, devNameSpace);
     int rotationSticky = config->getValueWithDefault("RotationSticky", 0, devNameSpace);
     int rollSticky = config->getValueWithDefault("RollSticky", 0, devNameSpace);
     int translateSticky = config->getValueWithDefault("TranslateSticky", 1, devNameSpace);
     int translateZSticky = config->getValueWithDefault("TranslateZSticky", 1, devNameSpace);
+    VRFloatArray defaultPos {0, 0, -1};
+    VRFloatArray defaultDir {0, 0, 1};
+    VRFloatArray defaultUp  {0, 1, 0};//TODO: Find better constructors that don't require c++ 11
+    VRVector3 startPos = config->getValueWithDefault("StartingPosition", defaultPos, devNameSpace);
+    VRVector3 startDir = config->getValueWithDefault("StartingDirection", defaultDir, devNameSpace);
+    VRVector3 startUp = config->getValueWithDefault("StartingUp", defaultUp, devNameSpace);
     
-    VRFakeTrackerDeviceRelative *dev = new VRFakeTrackerDeviceRelative(trackerName, toggleEvent, rotateEvent, rollEvent, translateEvent, translateZEvent, xyScale, zScale, rScale, rotationSticky, rollSticky, translateSticky, translateZSticky);
+    VRFakeTrackerDeviceRelative *dev = new VRFakeTrackerDeviceRelative(trackerName, toggleEvent, rotateEvent, rollEvent, translateEvent, translateZEvent, xyScale, zScale, rScale, rotationSticky, rollSticky, translateSticky, translateZSticky, startPos, startDir, startUp);
     vrMain->addEventHandler(dev);
 
     return dev;

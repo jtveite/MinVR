@@ -12,8 +12,8 @@ VRProjectionNode::VRProjectionNode(const std::string &name, float fovX, float fo
   _valuesNeeded.push_back("/LookAtMatrix");
  
   double degreeToRadian = 3.1415926 / 180;
-  float _horizontalClip = tan(fovX / 2 * degreeToRadian) * _nearClip;
-  float _verticalClip = tan(fovY / 2 * degreeToRadian) * _nearClip;
+  float _horizontalClip = tan(fovX * degreeToRadian / 2.0f) * _nearClip;
+  float _verticalClip = tan(fovY * degreeToRadian / 2.0f) * _nearClip;
 
   VRMatrix4 projMat = VRMatrix4::projection(-_horizontalClip, _horizontalClip, -_verticalClip, _verticalClip, _nearClip, _farClip); //TODO: This should just be cacheable once since it doesn't change.
  _projectionMatrix = projMat; 
@@ -34,6 +34,7 @@ void VRProjectionNode::render(VRDataIndex *renderState, VRRenderHandler *renderH
   VRMatrix4 viewMat;
   if (renderState->exists("/LookAtMatrix")){
     VRMatrix4 lookAtMatrix = renderState->getValue("/LookAtMatrix");
+    lookAtMatrix = lookAtMatrix.inverse();
     viewMat = lookAtMatrix;
   }
   renderState->addData("/ViewMatrix", viewMat);
