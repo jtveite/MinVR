@@ -1,5 +1,7 @@
 add_subdirectory(config)
 add_subdirectory(main)
+add_subdirectory(display)
+add_subdirectory(input)
 #add_subdirectory(eventdata)
 #add_subdirectory(eventhandler)
 #add_subdirectory(plugin)
